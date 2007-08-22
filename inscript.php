@@ -1,12 +1,15 @@
 <?php
 /*
 Plugin Name: InScript
-Plugin URI: http://www.urbangiraffe.com/plugins/inscript
+Plugin URI: http://urbangiraffe.com/plugins/inscript/
 Description: Extensible scripting framework.  Allows embedding of custom functions inside posts and any other piece of text.  Functions can manipulate and transform the text in a variety of ways, including the removal of text from texturizing.  Read the <a href="../wp-content/plugins/inscript/inscript.pdf">guide</a> or consult the <a href="http://www.urbangiraffe.com">UrbanGiraffe</a> website for full details.
 Author: John Godley
-Author URI: http://www.urbangiraffe.com
-Version: 1.0.1
-*/ 
+Author URI: http://urbangiraffe.com
+Version: 1.7.3
+
+1.7.2 - Remove dependency on auto.php.  Fix script path
+1.7.3 - Add a random argument to post functions
+*/
 
 /*
  * This code (and all code contained within the zip, except Geshi) is released under LGPL.
@@ -53,6 +56,7 @@ $local_disable  = false;    // Don't both changing this
 
 
 
+
 // ====================================================================================
 // If we are on the admin plugin page, then display the options, otherwise do the
 // plugin
@@ -62,6 +66,17 @@ if (is_plugin_page())
   inscript_options ();
 else
 {
+  // ====================================================================================
+  // Little function to escape strings, taking magic_quotes into consideration
+  // ====================================================================================
+
+	function escape_string ($str)
+	{
+    if (get_magic_quotes_gpc())
+      $str = stripslashes ($str);
+    return mysql_real_escape_string ($str);
+	}
+
   // ====================================================================================
   // Now we have some classes.  The classes are used as namespaces, so as not to create
   // lots of small functions.  They should not be instantied as objects.
@@ -80,8 +95,8 @@ else
         return $val;
       return "-- $name not defined --";
     }
-    
-    
+
+
     // See if the variable exists, given a name
     function exists ($name)
     {
@@ -90,31 +105,31 @@ else
         return true;
       return false;
     }
-    
-    
+
+
     // Add a new variable
     function add ($name, $value)
     {
       global $inscript_option_name;
-  
-      // Only add if it doesnt exist    
+
+      // Only add if it doesnt exist
       if (!inscript_var::exists ($name))
         add_option ($inscript_option_name.inscript_var::sanitise_name ($name), inscript_var::sanitise_value ($value));
     }
 
-    
+
     // Update a variable, given its ID
     function update ($id, $name, $value)
     {
       $name = inscript_var::sanitise_name ($name);
       $value = inscript_var::sanitise_value ($value);
-      
+
       global $inscript_option_name, $wpdb, $cache_settings;
     	$wpdb->query("UPDATE $wpdb->options SET option_value = '$value', option_name = '$inscript_option_name$name' WHERE option_id = '$id'");
     	$cache_settings = get_alloptions(); // Re cache settings
     }
-    
-    
+
+
     // Remove a variable, given its ID
     function remove ($id)
     {
@@ -122,8 +137,8 @@ else
       $wpdb->query("DELETE FROM $wpdb->options WHERE option_id = '$id'");
     	$cache_settings = get_alloptions(); // Re cache settings
     }
-    
-    
+
+
     // Return list of all variables
     function listall ()
     {
@@ -135,27 +150,27 @@ else
         $vars[$x]->name = substr ($vars[$x]->name, strlen ($inscript_option_name), strlen ($vars[$x]->name) - strlen ($inscript_option_name));
       return $vars;
     }
-    
-    
+
+
     // Sanitise a variable name
     function sanitise_name ($name)
     {
       return strip_tags (str_replace (' ', '', $name));
     }
-    
-    
+
+
     // Sanitise a variable value
     function sanitise_value ($value)
     {
-      return mysql_real_escape_string ($value);
+      return escape_string ($value);
     }
   }
 
-  
+
   // ====================================================================================
   // Handle all function restrictions
   // ====================================================================================
-  
+
   class inscript_restrict
   {
     // Returns all function restrictions
@@ -163,20 +178,20 @@ else
     {
       global $wpdb, $inscript_restrict_name;
       $vars = $wpdb->get_results ("SELECT option_id AS id, option_name AS name,option_value AS value FROM $wpdb->options WHERE left(option_name,".strlen ($inscript_restrict_name).") = '$inscript_restrict_name'");
-      
+
       // It seems the substr is not available to all MySQL versions... damn
       for ($x = 0; $x < count ($vars); $x++)
         $vars[$x]->name = substr ($vars[$x]->name, strlen ($inscript_restrict_name), strlen ($vars[$x]->name) - strlen ($inscript_restrict_name));
       return $vars;
     }
-    
+
     // Deletes a given function restriction (name is function)
     function delete ($name)
     {
       global $inscript_restrict_name;
       delete_option ($inscript_restrict_name.$name);
     }
-    
+
     // Restrict a function to the given level
     function add ($func, $level)
     {
@@ -188,7 +203,7 @@ else
       else
         update_option ($inscript_restrict_name.$func, $level);
     }
-    
+
     // Set the default restriction
     function set_default ($level)
     {
@@ -197,13 +212,13 @@ else
       else
         update_option ('inscript_default_level', $level);
     }
-    
+
     // Get the default restriction
     function get_default ()
     {
       return get_option ('inscript_default_level');
     }
-    
+
     // Check if the given author can access a function
     function is_allowed ($func, $authorlevel)
     {
@@ -212,17 +227,19 @@ else
       {
         // Default level
       }
-      
+
       if ($authorlevel >= $level)
         return true;
       return false;
     }
   }
-  
-  
+
+
   // ====================================================================================
   // Handle global keyword settings
   // ====================================================================================
+
+
 
   class inscript_global
   {
@@ -237,28 +254,28 @@ else
         $vars[$x]->name = substr ($vars[$x]->name, 9, strlen ($vars[$x]->name) - 9);
       return $vars;
     }
-    
+
     // Update a given global ID
     function update ($id, $name, $value)
     {
       global $wpdb;
-      $name = mysql_real_escape_string ($name);
-      $value = mysql_real_escape_string ($value);
+      $name = escape_string ($name);
+      $value = escape_string ($value);
 		  $wpdb->query ("UPDATE $wpdb->postmeta SET meta_key = 'inscript_$name', meta_value = '$value' WHERE meta_id = '$id'");
     }
-    
+
     // Delete a global
     function remove ($id)
     {
       global $wpdb;
       $wpdb->query ("DELETE FROM $wpdb->postmeta WHERE meta_id = '$id'");
     }
-    
+
     // Get a global, given its name
     function get ($name)
     {
       global $wpdb;
-      
+
     	$list = $wpdb->get_results ("SELECT meta_value AS value FROM $wpdb->postmeta WHERE post_id = 0 AND meta_key = 'inscript_$name'");
     	$meta = array ();
     	if (count ($list) > 0)
@@ -269,7 +286,26 @@ else
       return $meta;
     }
   }
-  
+
+
+  // Re-define ctype functions if they don't exist.  Thanks to Jeena Paradies for these functions.
+
+  if (!function_exists('ctype_alpha'))
+  {
+    function ctype_alpha ($string)
+    {
+      return preg_match('/^[a-z]*$/i', $string);
+    }
+  }
+
+  if (!function_exists('ctype_alnum'))
+  {
+    function ctype_alnum($string)
+    {
+      return preg_match('/^[a-z0-9]*$/i', $string);
+    }
+  }
+
 
   // ====================================================================================
   // Handle hooks into filters and actions
@@ -291,8 +327,8 @@ else
       }
       return false;
     }
-    
-    
+
+
     // This does all the donkey work for hooks.  It takes two arrays of filter and actions
     // and stores them in the options, and then creates the auto.php file with the functions
     function set_hooks ($filters, $actions)
@@ -314,7 +350,7 @@ else
           else
             unset ($filters[$key]);
         }
-        
+
         $filters = array_values ($filters);
       }
 
@@ -328,57 +364,50 @@ else
           else
             unset ($actions[$key]);
         }
-        
+
         $actions = array_values ($actions);
       }
-        
+
       $func .= "?>";
-      
+
       // Update options
       if (get_option ('inscript_filters') === false)
         add_option ('inscript_filters', count ($filters) > 0 ? implode (' ', $filters) : '');
       else
         update_option ('inscript_filters', count ($filters) > 0 ? implode (' ', $filters) : '');
-        
+
       if (get_option ('inscript_actions') === false)
         add_option ('inscript_actions', count ($actions) > 0 ? implode (' ', $actions) : '');
       else
         update_option ('inscript_actions', count ($actions) > 0 ? implode (' ', $actions) : '');
 
       // Create the include file
-      $file = @fopen (dirname (__FILE__).DIRECTORY_SEPARATOR."inscript".DIRECTORY_SEPARATOR."auto.php", "w");
-      if ($file)
-      {
-        fwrite ($file, $func);
-        fclose ($file);
-        return true;
-      }
-      else
-        return false;
+			update_option ('inscript_auto', $func);
+			return true;
     }
-    
-    
+
+
     // Return list of all filters as space-separated string
     function get_filters ()
     {
       return get_option ('inscript_filters');
     }
-    
-    
+
+
     // Return list of all filters as array
     function get_filters_array ()
     {
-      return explode (' ', inscript::get_filters ());
+      return explode (' ', inscript_hook::get_filters ());
     }
-    
-    
+
+
     // Return list of actions as space-separated stirng
     function get_actions ()
     {
       return get_option ('inscript_actions');
     }
-    
-    
+
+
     // Return true if the given filter is hooked
     function is_hooked_filter ($func)
     {
@@ -386,8 +415,8 @@ else
         return false;
       return true;
     }
-    
-    
+
+
     // Return true if the given action is hooked
     function is_hooked_action ($func)
     {
@@ -396,8 +425,8 @@ else
       return true;
     }
   }
-    
-    
+
+
   // ====================================================================================
   // General InScript functions
   // ====================================================================================
@@ -407,20 +436,20 @@ else
     // Load all the scripts
     function load_scripts ()
     {
-      $path = dirname (__FILE__).DIRECTORY_SEPARATOR."inscript".DIRECTORY_SEPARATOR;
+      $path = dirname (__FILE__).DIRECTORY_SEPARATOR."scripts".DIRECTORY_SEPARATOR;
       if (($dir = @opendir ($path)))
       {
         while ($file = readdir ($dir))
         {
-          if (is_file ($path.$file) && $file != "auto.php")
+          if (is_file ($path.$file) && $file != "auto.php" && substr ($file, -3, 3) == "php")
             include ($path.$file);
         }
-        
+
         closedir ($dir);
       }
     }
-    
-    
+
+
     // Return array of all function names, taken from the scripts
     function get_function_names ()
     {
@@ -437,53 +466,53 @@ else
             $names = array_merge ($names, $matches[1]);
           }
         }
-        
+
         closedir ($dir);
       }
-      
+
       sort ($names);
       return $names;
     }
-    
-    
+
+
     // Change the wpautop setting
     function set_autop ($val)
     {
       update_option ('inscript_autop', $val ? "true" : "false");
     }
-    
-    
+
+
     // Change the wptexturize setting
     function set_texturize ($val)
     {
       update_option ('inscript_texturize', $val ? "true" : "false");
     }
-    
-    
+
+
     // Change the InScript disabled setting
     function set_disable ($val)
     {
       update_option ('inscript_disable', $val ? "true" : "false");
     }
-    
-    
+
+
     // Return true if InScript is disabled
     function is_disabled ()
     {
       global $local_disable;
       if ($local_disable == true)
         return true;
-        
+
       if (($val = get_option ('inscript_disable')) == false)
       {
         add_option ('inscript_disable', "false");
         return false;
       }
-      
+
       return $val == "true" ? true : false;
     }
-   
-   
+
+
     // Return true if wpautop is disabled
     function is_autopdisabled ()
     {
@@ -491,8 +520,8 @@ else
         return true;
       return false;
     }
-   
-    // Return true if wptexturize is disabled 
+
+    // Return true if wptexturize is disabled
     function is_texturizedisabled ()
     {
       if (get_option ('inscript_texturize') == 'true')
@@ -510,12 +539,12 @@ else
   {
     return inscript_var::get ($matches[1]);
   }
-  
-  
+
+
   // ====================================================================================
   // Helper function for scripts
   // ====================================================================================
-    
+
   function inscript_helper_get ($args, $key, $default)
   {
     if (isset ($args[$key]))
@@ -542,10 +571,10 @@ else
       // Parse the arguments
       preg_match_all ("/(\w+)=\"(.*?)\"/", $matches[2], $params);
       preg_match_all ("/\[(\w+)=(.*?)\]/s", $matches[2], $params2);
-      
+
       $params[1] = array_merge ($params[1], $params2[1]);
       $params[2] = array_merge ($params[2], $params2[2]);
-            
+
       // Convert into an array of name => value
       // $params[1] = param names
       // $params[2] = param values
@@ -563,7 +592,7 @@ else
       if (inscript_restrict::is_allowed ($matches[1], 3))
       {
         $result = $func ($args);      // This is the important bit - finally!
-        
+
         // Do entity encoding
         if (isset ($args['ent']) && $args['ent'] == "on")
           $result = htmlentities ($result);
@@ -578,14 +607,14 @@ else
 
         return $result;
       }
-      
+
       return "-- user not allowed ".$matches[1]." --";
     }
-    
+
     return "-- no func ".$matches[1]." --";
   }
-  
-  
+
+
   // ====================================================================================
   // Called by an end hook to replace the cache tags with the cached data
   // ====================================================================================
@@ -635,15 +664,15 @@ else
         // Do the inscript markup
         $text = preg_replace_callback ("/!!(\w+)!!/",                                                 "replace_var",  $text);
         $text = preg_replace_callback ("/%%[\s]*(\w*)[\s]*(.*?)%%/s",                                 "run_function", $text);
-        $text = preg_replace_callback ("/<inscript[\s]+func=\"(\w*)\"[\s]*(.*?)\/>/",                "run_function", $text);
+        $text = preg_replace_callback ("/<inscript[\s]+func=\"(\w*)\"[\s]*(.*?)\/>/",                 "run_function", $text);
         $text = preg_replace_callback ("/<inscript[\s]+func=\"(\w+)\"[\s]+(.*?)>(.*?)<\/inscript>/s", "run_function", $text);
       }
     }
-    
+
     return $text;
   }
-  
-  
+
+
   // ====================================================================================
   // The entry point for filters and actions
   // ====================================================================================
@@ -651,8 +680,7 @@ else
   function inscript_filter ($text, $hook)
   {
     global $inscript_global_body;
-    $inscript_global_body = $text;
-    
+
     // Apply all patterns
     if (inscript::is_disabled () == false)
     {
@@ -669,25 +697,31 @@ else
       {
         if (get_post_meta ($id, "inscript_disable") || (is_archive () && $hook == "the_time"))
           return $text;
-        $meta = get_post_meta ($id, "inscript_$hook");
+        $meta = (array)get_post_meta ($id, "inscript_$hook");
       }
 
       // Global keywords
       $meta = array_merge ($meta, inscript_global::get ($hook));
     }
 
-    $inscript_global_body = run_patterns ($text);    
-    if (inscript::is_disabled () == false)
+    // Run patterns in the text itself
+    $inscript_global_body = run_patterns ($text);
+
+    // Now see if we need to apply custom fields to the text as a whole
+    if (inscript::is_disabled () == false && count ($meta) > 0)
     {
-      // Now we go through the meta-data elements and check if %%% exists - if so, then we run_function with $text as the 3rd data
-      // otherwise we just tag the meta-data onto the end
-      if (count ($meta) > 0)
+      foreach ($meta AS $item)
       {
-        foreach ($meta AS $item)
-          $inscript_global_body = run_patterns ($item);
+        if (strstr ($item, '%2') !== FALSE)
+          $metastr = run_patterns ($item);
+        else
+          $metastr .= run_patterns ($item);
+        $inscript_global_body = $metastr;
       }
+
+      $inscript_global_body = $metastr;
     }
-    
+
     return $inscript_global_body;
   }
 
@@ -701,11 +735,12 @@ else
 
   // Include all script files
   inscript::load_scripts ();
-  
-  // Include the auto-generated filters
-  if (file_exists (dirname (__FILE__).DIRECTORY_SEPARATOR.'inscript/auto.php'))
-    include_once (dirname (__FILE__).DIRECTORY_SEPARATOR.'inscript/auto.php');
 
+  // Include the auto-generated filters
+  $auto = get_option ('inscript_auto');
+	if ($auto)
+		eval ("?>".$auto);
+		
   // Disable wpautop
   if (inscript::is_autopdisabled ())
   {
@@ -736,7 +771,7 @@ if (!function_exists ('inscript_disable'))
     global $local_disable;
     $local_disable = true;
   }
-  
+
   function inscript_enable ()
   {
     global $local_disable;
@@ -756,26 +791,25 @@ if (!function_exists ('inscript_options'))
     if ($bool)
       echo ' checked="checked"';
   }
-  
-  
+
+
   // Function to add InScript into the options page
   function inscript_add_options_page()
   {
-	  if (function_exists('add_options_page'))
-		  add_options_page('InScript options', 'InScript', 5, basename(__FILE__));
+	  add_options_page ('InScript options', 'InScript', 'edit_plugins', basename(__FILE__), 'inscript_options');
 	}
 
-  add_action('admin_head', 'inscript_add_options_page');
-  
-  
+  add_action('admin_menu', 'inscript_add_options_page');
+
+
   // ====================================================================================
   // Displays the InScript options page
   // ====================================================================================
-  
+
   function inscript_options ()
   {
-    if (isset ($_GET['error']))
-      echo '<div class="updated" style="text-align: center"><p><strong>WARNING!</strong></p><p>Could not update the <code>auto.php</code> file - check write permissions on the <code>inscript</code> directory</p></div>';
+    // if (isset ($_GET['error']))
+    //   echo '<div class="updated" style="text-align: center"><p><strong>WARNING!</strong></p><p>Could not update the <code>auto.php</code> file - check write permissions on the <code>inscript</code> directory</p></div>';
     ?>
   	<form action="<?php echo $_SERVER['PHP_SELF'] ?>" method="post">
     <div class="wrap">
@@ -799,8 +833,9 @@ if (!function_exists ('inscript_options'))
             {
               foreach ($vars AS $variable)
               {
+                $rows = substr_count ($variable->value, "\n") + 1;
                 echo '<tr><td valign="top"><input type="text" name="varname_'.$variable->id.'" value="'.$variable->name.'"/></td>';
-                echo '<td><textarea wrap="off" cols="40" rows="2" name="var_'.$variable->id.'">'.htmlentities ($variable->value).'</textarea></th>';
+                echo '<td><textarea wrap="off" cols="40" rows="'.$rows.'" name="var_'.$variable->id.'">'.htmlentities ($variable->value).'</textarea></th>';
                 echo '<th valign="top"><input type="checkbox" name="deletevar_'.$variable->id.'"/></td></tr>';
               }
             }
@@ -845,7 +880,7 @@ if (!function_exists ('inscript_options'))
                     echo '<tr class="alternate">';
                   else
                     echo '<tr>';
-                    
+
                   echo '<td>'.$restrict->name.'</td><td align="center">'.$restrict->value.'</td><td align="center"><input type="checkbox" name="dellevel_'.$restrict->name.'"/></tr>';
                 }
               }
@@ -861,7 +896,7 @@ if (!function_exists ('inscript_options'))
               echo 'Restrict access of function <select name="funcname"><option name="-" selected="selected">-----</option>';
               foreach ($names AS $name)
                 echo '<option name="'.$name.'">'.$name.'</option>';
-              
+
               echo '</select> to level <select name="funclevel"><option name="default" selected="selected">Default</option>';
               for ($x = 1; $x <= 10; $x++)
                 echo '<option name="'.$x.'">'.$x.'</option>';
@@ -869,8 +904,8 @@ if (!function_exists ('inscript_options'))
             }
           ?>
         </fieldset>
-      	<p class="submit"> 
-      		<input type="submit" name="Submit" value="Update Options &raquo;" /> 
+      	<p class="submit">
+      		<input type="submit" name="Submit" value="Update Options &raquo;" />
       	</p>
       </div>
       <div class="wrap">
@@ -933,8 +968,9 @@ if (!function_exists ('inscript_options'))
             {
               foreach ($list AS $meta)
               {
+                $rows = substr_count ($meta->value, "\n") + 1;
                 echo '<td valign="top"><input type="text" name="metaname_'.$meta->id.'" value="'.$meta->name.'"/></td>';
-                echo '<td><textarea wrap="off" name="metavalue_'.$meta->id.'" cols="50">'.htmlentities ($meta->value).'</textarea></td>';
+                echo '<td><textarea wrap="off" name="metavalue_'.$meta->id.'" cols="50" rows="'.$rows.'">'.htmlentities ($meta->value).'</textarea></td>';
                 echo '<td valign="top" align="center"><input type="checkbox" name="metadelete_'.$meta->id.'"/></td></tr>';
               }
             }
@@ -948,15 +984,15 @@ if (!function_exists ('inscript_options'))
           <tr><td>Data:</td><td><textarea wrap="off" name="newdata" cols="80"></textarea></td></tr>
           </table>
         </fieldset>
-      	<p class="submit"> 
-      		<input type="submit" name="Submit" value="Update Options &raquo;" /> 
+      	<p class="submit">
+      		<input type="submit" name="Submit" value="Update Options &raquo;" />
       	</p>
     </div>
     </form>
     <?php
   }
-  
-  
+
+
   // ====================================================================================
   // Processes the POST information from InScript options
   // ====================================================================================
@@ -976,22 +1012,22 @@ if (!function_exists ('inscript_options'))
 	        inscript_var::update ($variable->id, $_POST['varname_'.$variable->id], $_POST['var_'.$variable->id]);
 	    }
 	  }
-	  
+
 	  // New variable?
 	  if ($_POST['newvar_name'] && $_POST['newvar_value'])
 	    inscript_var::add ($_POST['newvar_name'], $_POST['newvar_value']);
-	  
+
 	  // Update global options
 	  inscript::set_disable   (isset ($_POST['disable']) ? true : false);
 	  inscript::set_autop     (isset ($_POST['autop']) ? true : false);
 	  inscript::set_texturize (isset ($_POST['texturize']) ? true : false);
-	  
+
 	  // User-level restrictions
 	  if ($_POST['funcname'] != "-----" && $_POST['funclevel'])
 	    inscript_restrict::add ($_POST['funcname'], $_POST['funclevel']);
-	    
+
 	  inscript_restrict::set_default ($_POST['defaultlevel']);
-	  
+
 	  $restrict = inscript_restrict::get ();
 	  if ($restrict)
 	  {
@@ -1001,7 +1037,7 @@ if (!function_exists ('inscript_options'))
 	        inscript_restrict::delete ($item->name);
 	    }
 	  }
-	  
+
 	  // Filters - first get 'other' hooks
 	  if ($_POST['otherfilters'])
       $filters = explode (' ', $_POST['otherfilters']);
@@ -1018,7 +1054,7 @@ if (!function_exists ('inscript_options'))
     // Actions - first get 'other' actions
     if ($_POST['otheractions'])
       $actions = explode (' ', $_POST['otheractions']);
-    
+
     global $inscript_default_actions;
 	  foreach ($inscript_default_actions AS $key => $value)
 	  {
@@ -1035,7 +1071,7 @@ if (!function_exists ('inscript_options'))
 
     if (inscript_hook::set_hooks ($filters, $actions) == false)
       $error = true;
-    
+
     // Update all other meta values
     $metas = inscript_global::get_list ();
     if (count ($metas) > 0)
@@ -1048,15 +1084,15 @@ if (!function_exists ('inscript_options'))
           inscript_global::update ($meta->id, $_POST['metaname_'.$meta->id], $_POST['metavalue_'.$meta->id]);
       }
     }
-    
+
     // And finally the global data
     if ($_POST['newdata'] && $_POST['newglobal'])
     {
-      $name = mysql_real_escape_string ($_POST['newglobal']);
-      $value = mysql_real_escape_string ($_POST['newdata']);
+      $name = escape_string ($_POST['newglobal']);
+      $value = escape_string ($_POST['newdata']);
       add_post_meta (0, "inscript_$name", $value);
     }
-    
+
     // Redirect to the options page so we don't get POST reload issues
   	$location = get_option('siteurl') . '/wp-admin/admin.php?page=inscript.php';
   	if ($error == true)
@@ -1071,7 +1107,7 @@ if (!function_exists ('inscript_options'))
 
 if (isset ($_POST['inscript']))
   inscript_process ();
-  
+
 
 
 // Phew, we've done
