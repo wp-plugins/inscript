@@ -12,12 +12,14 @@ InScript is an extensible scripting framework that provides the capability to in
 At the simplest level, it is a generic pattern matcher that searches for specific patterns, or tags, and replaces them with something else.  However, instead of replacing these patterns with static text, you can replace them with variables, functions, and even PHP code.
 
 Some of the features that InScript provides are:
+
 * Dynamic variables, which can be used in many places and are automatically updated
 * Disable WordPress texturize functions across the whole blog, individual posts, or even individual words
 * Conversely, enable texturize, textile, markdown, or any formatting on individual posts or words
 * Embed well-defined scripts inside posts and any other part of WordPress, without modifying the theme
 
 The embedded scripts are very powerful, and allow you to do things like:
+
 * Insert post & author information
 * Add HTTP meta-values and make them post-specific
 * Customise the appearance of words, paragraphs, or posts
