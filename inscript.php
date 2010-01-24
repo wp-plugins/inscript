@@ -5,10 +5,11 @@ Plugin URI: http://urbangiraffe.com/plugins/inscript/
 Description: Extensible scripting framework.  Allows embedding of custom functions inside posts and any other piece of text.  Functions can manipulate and transform the text in a variety of ways, including the removal of text from texturizing.  Read the <a href="../wp-content/plugins/inscript/inscript.pdf">guide</a> or consult the <a href="http://www.urbangiraffe.com">UrbanGiraffe</a> website for full details.
 Author: John Godley
 Author URI: http://urbangiraffe.com
-Version: 1.7.3
+Version: 1.7.4
 
 1.7.2 - Remove dependency on auto.php.  Fix script path
 1.7.3 - Add a random argument to post functions
+1.7.4 - Replace get_alloptions with wp_load_alloptions
 */
 
 /*
@@ -126,7 +127,7 @@ else
 
       global $inscript_option_name, $wpdb, $cache_settings;
     	$wpdb->query("UPDATE $wpdb->options SET option_value = '$value', option_name = '$inscript_option_name$name' WHERE option_id = '$id'");
-    	$cache_settings = get_alloptions(); // Re cache settings
+    	$cache_settings = wp_load_alloptions(); // Re cache settings
     }
 
 
@@ -135,7 +136,7 @@ else
     {
       global $wpdb, $cache_settings;
       $wpdb->query("DELETE FROM $wpdb->options WHERE option_id = '$id'");
-    	$cache_settings = get_alloptions(); // Re cache settings
+    	$cache_settings = wp_load_alloptions(); // Re cache settings
     }
 
 
@@ -1111,5 +1112,3 @@ if (isset ($_POST['inscript']))
 
 
 // Phew, we've done
-
-?>

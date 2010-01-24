@@ -3,7 +3,7 @@ Contributors: johnny5
 Donate link: http://urbangiraffe.com/about/support/
 Tags: scripting, meta, php, texturize, dates, times, titles, plugins, filters, action, customize
 Requires at least: 1.5
-Tested up to: 2.2
+Tested up to: 2.9
 Stable tag: trunk
 
 InScript is an extensible scripting framework that provides the capability to insert and modify data without needing to modify any WordPress files.  
